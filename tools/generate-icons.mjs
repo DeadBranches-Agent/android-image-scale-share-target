@@ -23,7 +23,7 @@ const INDEX_KT = join(ROOT, 'app/src/main/java/ca/urbanlight/imagescale/icons/Ic
 const LICENSE_OUT = join(ROOT, 'tools/TABLER_ICONS_LICENSE');
 
 // Curated categories (~1000 icons). Brand logos deliberately excluded.
-const CATEGORIES = new Set(['Photography', 'Media', 'Document', 'Arrows', 'Shapes', 'Communication']);
+const CATEGORIES = new Set(['Photography', 'Media', 'Document', 'Arrows', 'Shapes', 'Communication', 'Math']);
 
 async function resolvePackageDir() {
   const argIdx = process.argv.indexOf('--pkg');
