@@ -3,6 +3,7 @@ package ca.urbanlight.imagescale.image
 data class ProcessResult(
     val sourceName: String,
     val outputName: String,
+    val outputUri: String,
     val originalWidth: Int,
     val originalHeight: Int,
     val outputWidth: Int,
