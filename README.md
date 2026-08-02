@@ -61,6 +61,32 @@ The API 37 SDK is not stable yet. When it is: set `compileSdk = 37` and
 and bump AGP to the first version supporting API 37. No code here uses APIs
 newer than 26, so no source changes are expected.
 
+## Getting an installable APK
+
+Two options, no local build needed:
+
+- **Releases (recommended):** run the **release** workflow from the Actions
+  tab (or push a `v*` tag). It builds a signed release APK and attaches it to
+  a GitHub Release — download it straight from the Releases page on your
+  phone and sideload it.
+- **Per-commit debug APK:** every push also uploads an `app-debug` artifact —
+  open the run in the Actions tab and scroll to the *Artifacts* section at
+  the bottom (login required, expires after 90 days).
+
+### Release signing
+
+By default each release is signed with a **throwaway key generated in CI**,
+which installs fine but means a later release can't upgrade over an earlier
+one (Android requires matching signatures — uninstall first). For a stable
+key, add two repository secrets and re-run the workflow:
+
+1. Create a keystore locally:
+   `keytool -genkeypair -keystore release.keystore -alias release -keyalg RSA -validity 10950`
+2. Secret `RELEASE_KEYSTORE_BASE64`: output of `base64 -w0 release.keystore`
+3. Secret `RELEASE_KEYSTORE_PASSWORD`: the keystore password
+
+Keep the keystore file backed up privately; it is deliberately not in the repo.
+
 ## Regenerating the bundled icons
 
 ```bash

@@ -17,11 +17,30 @@ android {
         versionName = "1.0"
     }
 
+    // Release signing comes from the environment (CI decodes a keystore from
+    // secrets, or generates a throwaway one). Without these vars the release
+    // build stays unsigned, which is fine for local checks.
+    val keystorePath = System.getenv("RELEASE_KEYSTORE")
+    if (keystorePath != null) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: "release"
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+                    ?: System.getenv("RELEASE_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (keystorePath != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
