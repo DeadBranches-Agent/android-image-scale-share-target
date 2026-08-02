@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Image Scale</string>
+    <string name="add_first_target">Add your first share target</string>
+    <string name="notification_channel_name">Image conversion progress</string>
+    <string name="pause">Pause</string>
+    <string name="resume">Resume</string>
+    <string name="stop">Stop</string>
+    <string name="cancel_confirm_title">Really cancel image conversion?</string>
+    <string name="cancel_confirm_delete">Also delete images already converted this session</string>
+    <string name="cancel_confirm_continue">Continue Conversion</string>
+    <string name="cancel_confirm_stop">Stop Image Conversion</string>
+</resources>

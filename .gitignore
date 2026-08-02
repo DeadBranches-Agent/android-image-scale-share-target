@@ -1,0 +1,13 @@
+*.iml
+.gradle/
+.kotlin/
+build/
+local.properties
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+tools/node_modules/
+tools/package-lock.json
