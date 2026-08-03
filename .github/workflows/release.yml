@@ -1,0 +1,85 @@
+name: release
+
+# Builds a signed release APK and attaches it to a GitHub Release.
+# Run it from the Actions tab (workflow_dispatch) or push a v* tag.
+#
+# Signing: if the repo secrets RELEASE_KEYSTORE_BASE64 and
+# RELEASE_KEYSTORE_PASSWORD are set, the APK is signed with that stable key
+# (upgrades install over previous releases). Without them a fresh throwaway
+# key is generated per release — the APK installs fine, but upgrading to a
+# later release signed with a different key requires uninstalling first.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v1.0). Leave empty for an auto build tag."
+        required: false
+        default: ""
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "Using keystore from repository secrets"
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            echo "RELEASE_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          else
+            echo "No signing secrets set — generating a throwaway key for this release"
+            keytool -genkeypair -keystore "$RUNNER_TEMP/release.keystore" \
+              -alias release -keyalg RSA -keysize 2048 -validity 10950 \
+              -storepass throwaway -keypass throwaway \
+              -dname "CN=Image Scale ephemeral release key"
+            echo "RELEASE_KEYSTORE_PASSWORD=throwaway" >> "$GITHUB_ENV"
+          fi
+          echo "RELEASE_KEYSTORE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+          echo "RELEASE_KEY_ALIAS=release" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK
+        run: ./gradlew assembleRelease
+
+      - name: Determine release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=build-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Rename APK
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk \
+             "image-scale-${{ steps.tag.outputs.tag }}.apk"
+
+      - name: Create GitHub Release with APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Image Scale ${{ steps.tag.outputs.tag }}
+          files: image-scale-${{ steps.tag.outputs.tag }}.apk
+          generate_release_notes: true
