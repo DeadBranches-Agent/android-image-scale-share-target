@@ -102,7 +102,10 @@ for (const icon of selected) {
   const svg = readFileSync(join(pkg, 'icons/outline', `${icon.name}.svg`), 'utf8');
   const res = resName(icon.name);
   writeFileSync(join(DRAWABLE_DIR, `${res}.xml`), svgToVectorDrawable(svg, icon.name));
-  tagsOut.push({ name: icon.name, res, category: icon.category, tags: icon.tags ?? [] });
+  // Tabler tags variant icons with raw numbers (and the odd null) — the app
+  // parses tags as List<String>, so normalize here.
+  const tags = (icon.tags ?? []).filter((t) => t != null).map(String);
+  tagsOut.push({ name: icon.name, res, category: icon.category, tags });
   indexEntries.push(`        "${icon.name}" to R.drawable.${res},`);
 }
 
