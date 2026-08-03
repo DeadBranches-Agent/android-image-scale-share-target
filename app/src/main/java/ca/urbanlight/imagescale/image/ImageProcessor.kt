@@ -43,41 +43,14 @@ class ImageProcessor(private val resolver: ContentResolver) {
         val openSource: () -> InputStream? = { resolver.openInputStream(source) }
         val sourceName = sourceDisplayName(source) ?: "image"
 
-        onStage(5)
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        openSource()?.use { BitmapFactory.decodeStream(it, null, bounds) }
-            ?: throw ProcessingException("cannot open $sourceName")
-        val origW = bounds.outWidth
-        val origH = bounds.outHeight
-        if (origW <= 0 || origH <= 0) throw ProcessingException("$sourceName is not a decodable image")
-
-        val (targetW, targetH) = ScaleMath.targetDimensions(origW, origH, target.scaleFactorPercent)
-        val options = BitmapFactory.Options().apply {
-            inSampleSize = ScaleMath.inSampleSize(origW, origH, targetW, targetH)
-            inPreferredConfig = Bitmap.Config.ARGB_8888
-        }
-
-        onStage(15)
-        val decoded = openSource()?.use { BitmapFactory.decodeStream(it, null, options) }
-            ?: throw ProcessingException("cannot decode $sourceName")
-
-        onStage(45)
-        var bitmap = if (decoded.width != targetW || decoded.height != targetH) {
-            Bitmap.createScaledBitmap(decoded, targetW, targetH, true).also {
-                if (it !== decoded) decoded.recycle()
-            }
-        } else decoded
-
-        // Discarding metadata drops the orientation tag, so bake the rotation
-        // into the pixels; otherwise the tag is copied and pixels stay as-is.
-        if (target.discardMetadata) {
-            val orientation = ExifCopier.readOrientation(openSource)
-            orientationMatrix(orientation)?.let { matrix ->
-                val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-                if (rotated !== bitmap) bitmap.recycle()
-                bitmap = rotated
-            }
-        }
+        val decoded = decodeScaled(
+            openSource = openSource,
+            scalePercent = target.scaleFactorPercent,
+            bakeOrientation = target.discardMetadata,
+            sourceName = sourceName,
+            onStage = onStage,
+        )
+        val bitmap = decoded.bitmap
         val outW = bitmap.width
         val outH = bitmap.height
 
@@ -106,8 +79,8 @@ class ImageProcessor(private val resolver: ContentResolver) {
             sourceName = sourceName,
             outputName = document.name ?: outputName,
             outputUri = document.uri.toString(),
-            originalWidth = origW,
-            originalHeight = origH,
+            originalWidth = decoded.originalWidth,
+            originalHeight = decoded.originalHeight,
             outputWidth = outW,
             outputHeight = outH,
             outputBytes = document.length(),
@@ -115,24 +88,83 @@ class ImageProcessor(private val resolver: ContentResolver) {
         )
     }
 
-    private fun orientationMatrix(orientation: Int): Matrix? {
-        val matrix = Matrix()
-        when (orientation) {
-            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.postScale(-1f, 1f)
-            ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
-            ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.postScale(1f, -1f)
-            ExifInterface.ORIENTATION_TRANSPOSE -> {
-                matrix.postRotate(90f)
-                matrix.postScale(-1f, 1f)
+    internal class DecodedImage(val bitmap: Bitmap, val originalWidth: Int, val originalHeight: Int)
+
+    companion object {
+        /**
+         * Bounds-decode, subsample, exact-scale, and optionally bake EXIF rotation
+         * into the pixels. Extracted from [process] so the decode path is testable
+         * without a ContentResolver.
+         *
+         * Note: the bounds pass uses inJustDecodeBounds, where decodeStream returns
+         * null BY CONTRACT — only a null stream means the source can't be opened.
+         */
+        internal fun decodeScaled(
+            openSource: () -> InputStream?,
+            scalePercent: Int,
+            bakeOrientation: Boolean,
+            sourceName: String,
+            onStage: (Int) -> Unit = {},
+        ): DecodedImage {
+            onStage(5)
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            val boundsStream = openSource() ?: throw ProcessingException("cannot open $sourceName")
+            boundsStream.use { BitmapFactory.decodeStream(it, null, bounds) }
+            val origW = bounds.outWidth
+            val origH = bounds.outHeight
+            if (origW <= 0 || origH <= 0) throw ProcessingException("$sourceName is not a decodable image")
+
+            val (targetW, targetH) = ScaleMath.targetDimensions(origW, origH, scalePercent)
+            val options = BitmapFactory.Options().apply {
+                inSampleSize = ScaleMath.inSampleSize(origW, origH, targetW, targetH)
+                inPreferredConfig = Bitmap.Config.ARGB_8888
             }
-            ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
-            ExifInterface.ORIENTATION_TRANSVERSE -> {
-                matrix.postRotate(270f)
-                matrix.postScale(-1f, 1f)
+
+            onStage(15)
+            val decodeStream = openSource() ?: throw ProcessingException("cannot open $sourceName")
+            val decoded = decodeStream.use { BitmapFactory.decodeStream(it, null, options) }
+                ?: throw ProcessingException("cannot decode $sourceName")
+
+            onStage(45)
+            var bitmap = if (decoded.width != targetW || decoded.height != targetH) {
+                Bitmap.createScaledBitmap(decoded, targetW, targetH, true).also {
+                    if (it !== decoded) decoded.recycle()
+                }
+            } else decoded
+
+            // Discarding metadata drops the orientation tag, so bake the rotation
+            // into the pixels; otherwise the tag is copied and pixels stay as-is.
+            if (bakeOrientation) {
+                val orientation = ExifCopier.readOrientation(openSource)
+                orientationMatrix(orientation)?.let { matrix ->
+                    val rotated =
+                        Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                    if (rotated !== bitmap) bitmap.recycle()
+                    bitmap = rotated
+                }
             }
-            ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
-            else -> return null
+            return DecodedImage(bitmap, origW, origH)
         }
-        return matrix
+
+        private fun orientationMatrix(orientation: Int): Matrix? {
+            val matrix = Matrix()
+            when (orientation) {
+                ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.postScale(-1f, 1f)
+                ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+                ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.postScale(1f, -1f)
+                ExifInterface.ORIENTATION_TRANSPOSE -> {
+                    matrix.postRotate(90f)
+                    matrix.postScale(-1f, 1f)
+                }
+                ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+                ExifInterface.ORIENTATION_TRANSVERSE -> {
+                    matrix.postRotate(270f)
+                    matrix.postScale(-1f, 1f)
+                }
+                ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+                else -> return null
+            }
+            return matrix
+        }
     }
 }
