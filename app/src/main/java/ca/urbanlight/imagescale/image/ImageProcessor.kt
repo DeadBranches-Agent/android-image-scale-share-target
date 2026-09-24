@@ -45,8 +45,9 @@ class ImageProcessor(private val resolver: ContentResolver) {
 
         onStage(5)
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        openSource()?.use { BitmapFactory.decodeStream(it, null, bounds) }
-            ?: throw ProcessingException("cannot open $sourceName")
+        // A bounds-only decode always returns null, so only the stream is null-checked.
+        val boundsStream = openSource() ?: throw ProcessingException("cannot open $sourceName")
+        boundsStream.use { BitmapFactory.decodeStream(it, null, bounds) }
         val origW = bounds.outWidth
         val origH = bounds.outHeight
         if (origW <= 0 || origH <= 0) throw ProcessingException("$sourceName is not a decodable image")
