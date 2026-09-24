@@ -20,7 +20,7 @@ and icon in the Android share sheet.
 - Sharing to the generic app entry uses the only visible target, or shows a
   mini picker when several exist.
 - Conversion runs in a **foreground service** with a notification showing the
-  current filename, a per-file progress bar, an overall `iC/nT` bar, and
+  current filename, a single batch progress bar with an `iC/nT` count, and
   **Pause/Stop** buttons. Stop (or swiping the notification away) asks
   *"Really cancel image conversion?"* with an optional
   *"Also delete images already converted this session"*.
@@ -110,7 +110,9 @@ are excluded.
 - The `.jsonl` debug log is appended via SAF `wa` streams; if the provider
   revokes access or doesn't support append, logging turns itself off with a
   toast.
-- Per-file progress is stage-based (decode → scale → write), not byte-exact.
+- The batch bar advances through each image in stages (decode → scale →
+  write), so it moves smoothly rather than jumping per image; it is not
+  byte-exact.
 - On Android 15+, foreground services of this type have a ~6 h runtime cap —
   far beyond any realistic batch.
 - If notifications are denied, the job still runs; there is just no progress

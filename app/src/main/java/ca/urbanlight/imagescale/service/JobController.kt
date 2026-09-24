@@ -11,7 +11,15 @@ data class JobProgress(
     val currentIndex: Int = 0,        // 1-based iC once the first image starts
     val currentFileName: String = "",
     val filePercent: Int = 0,         // stage-based 0..100 for the current file
-)
+) {
+    /** Whole-batch 0..100: finished images plus the current one's stage progress. */
+    val overallPercent: Int
+        get() {
+            if (total <= 0 || currentIndex <= 0) return 0
+            val done = (currentIndex - 1).coerceIn(0, total) * 100 + filePercent
+            return (done / total).coerceIn(0, 100)
+        }
+}
 
 /**
  * Pure job state machine. The processing loop calls [awaitRunnable] between stages;

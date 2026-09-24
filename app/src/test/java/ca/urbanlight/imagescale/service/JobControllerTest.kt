@@ -74,4 +74,18 @@ class JobControllerTest {
         assertEquals("b.png", progress.currentFileName)
         assertEquals("file percent clamped", 100, progress.filePercent)
     }
+
+    @Test
+    fun `overall percent blends finished images with the current one`() {
+        assertEquals(0, JobProgress(total = 4).overallPercent)
+        assertEquals(0, JobProgress(total = 4, currentIndex = 1).overallPercent)
+        assertEquals(12, JobProgress(total = 4, currentIndex = 1, filePercent = 50).overallPercent)
+        assertEquals(62, JobProgress(total = 4, currentIndex = 3, filePercent = 50).overallPercent)
+        assertEquals(100, JobProgress(total = 4, currentIndex = 4, filePercent = 100).overallPercent)
+    }
+
+    @Test
+    fun `single image batch tracks the file's own progress`() {
+        assertEquals(60, JobProgress(total = 1, currentIndex = 1, filePercent = 60).overallPercent)
+    }
 }
