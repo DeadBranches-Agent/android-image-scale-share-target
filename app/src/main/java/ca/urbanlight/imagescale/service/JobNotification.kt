@@ -9,14 +9,13 @@ import androidx.core.app.NotificationCompat
 import ca.urbanlight.imagescale.App
 import ca.urbanlight.imagescale.R
 
-/** Builds the conversion-progress notification: filename, two progress bars, iC/nT, Pause/Stop. */
+/** Builds the conversion-progress notification: filename, one batch progress bar, iC/nT, Pause/Stop. */
 class JobNotification(private val context: Context) {
 
     fun build(progress: JobProgress, paused: Boolean): Notification {
         val content = RemoteViews(context.packageName, R.layout.notification_progress).apply {
             setTextViewText(R.id.current_file_name, progress.currentFileName.ifBlank { "Preparing…" })
-            setProgressBar(R.id.file_progress, 100, progress.filePercent, false)
-            setProgressBar(R.id.overall_progress, progress.total, progress.currentIndex, false)
+            setProgressBar(R.id.overall_progress, 100, progress.overallPercent, false)
             setTextViewText(R.id.overall_count, "${progress.currentIndex}/${progress.total}")
         }
 
