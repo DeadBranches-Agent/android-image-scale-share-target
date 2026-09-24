@@ -33,7 +33,11 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      # The legacy 'tools' package in setup-android's default list no longer
+      # exists in current cmdline-tools, which fails sdkmanager.
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - uses: gradle/actions/setup-gradle@v4
 
